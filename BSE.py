@@ -484,6 +484,53 @@ class Trader_Sniper(Trader):
 
 
 
+# Trader class MGD from paper http://researcher.ibm.com/researcher/files/us-kephart/ec01_dblauc.pdf & http://www2.econ.iastate.edu/tesfatsi/PriceFormationDA.gjerstad.pdf
+# finds bid or ask with highest potential based on history of last bids/asks
+# by Adam Coales
+class Trader_MGD(Trader):
+
+        def __init__(self, ttype, tid, balance):
+                self.ttype = ttype
+                self.tid = tid
+                self.balance = balance
+                self.blotter = []
+                self.orders = []
+                self.willing = 1
+                self.able = 1
+                self.lastquote = None
+                self.bestpotentialbid = 0
+                self.bestpotentialask = bse_sys_maxprice
+                self.job = None
+                self.limit = None
+                
+        def getorder(self, time, countdown, lob):
+                if len(self.orders) < 1:
+                        order = None
+                else:
+                        self.limit = self.orders[0].price
+                        self.job = self.orders[0].otype
+                        if self.job == 'Bid':
+                                if lob['bids']['n'] > 0:
+                                        quoteprice = self.bestpotentialbid
+                                else:
+                                        quoteprice = lob['bids']['worst']
+                        else:
+                                if lob['asks']['n'] > 0:
+                                        quoteprice = self.bestpotentialask
+                                else:
+                                        quoteprice = lob['asks']['worst']
+                        self.lastquote = quoteprice
+                        order=Order(self.tid, self.job, quoteprice, self.orders[0].qty, time)
+
+                return order
+
+        def respond(self, time, lob, trade, verbose):
+                ob = lob['bids']['best']
+                oa = lob['asks']['best']
+                if self.job == 'Bid':
+                        # update self.bestpotentialbid
+                elif self.job == 'Ask':
+                        # update self.bestpotentialask
 
 # Trader subclass ZIP
 # After Cliff 1997
@@ -1030,7 +1077,7 @@ def market_session(sess_id, starttime, endtime, trader_spec, order_schedule, dum
         time = starttime
 
         orders_verbose = False
-        lob_verbose = False
+        lob_verbose = True
         process_verbose = False
         respond_verbose = False
         bookkeep_verbose = False
