@@ -390,6 +390,29 @@ class Trader_Giveaway(Trader):
                                     self.orders[0].qty,
                                     time)
                 return order
+                
+# Trader subclass Profitaway
+# giveaway but always tries to make atleast 1 profit
+# (but never makes a loss)
+class Trader_Profitaway(Trader):
+
+        def getorder(self, time, countdown, lob):
+                if len(self.orders) < 1:
+                        order = None
+                else:
+                        quoteprice = self.orders[0].price
+                        otype = self.orders[0].otype
+                        if otype == 'Bid':
+                                quoteprice = quoteprice-1
+                        else:
+                                quoteprice = quoteprice+1
+                        self.lastquote = quoteprice
+                        order=Order(self.tid,
+                                    self.orders[0].otype,
+                                    quoteprice,
+                                    self.orders[0].qty,
+                                    time)
+                return order
 
 
 
@@ -456,8 +479,14 @@ class Trader_Middle(Trader):
                         #no orders: return NULL
                         order = None
                 else:
-                        minprice = lob['bids']['best']
-                        maxprice = lob['asks']['best']
+                        if lob['bids']['n'] > 0:
+                                minprice = lob['bids']['best']
+                        else:
+                                minprice = lob['bids']['worst']
+                        if lob['asks']['n'] > 0:
+                                maxprice = lob['asks']['best']
+                        else:
+                                maxprice = lob['asks']['worst']
                         centre = maxprice+minprice
                         centre = centre / 2
                         limit = self.orders[0].price
@@ -1317,6 +1346,8 @@ def populate_market(traders_spec, traders, shuffle, verbose):
         def trader_type(robottype, name):
                 if robottype == 'GVWY':
                         return Trader_Giveaway('GVWY', name, 0.00)
+                if robottype == 'PFWY':
+                        return Trader_Profitaway('PFWY', name, 0.00)
                 elif robottype == 'ZIC':
                         return Trader_ZIC('ZIC', name, 0.00)
                 elif robottype == 'MIDL':
@@ -1710,7 +1741,7 @@ if __name__ == "__main__":
         order_sched = {'sup':supply_schedule, 'dem':demand_schedule,
                        'interval':30, 'timemode':'drip-poisson'}
 
-        buyers_spec = [('GVWY',10),('SHVR',10),('ZIC',10),('ZIP',10),('MTCH',10),('FLWR',10),('MIDL',10)]
+        buyers_spec = [('GVWY',10),('SHVR',10),('ZIC',10),('ZIP',10),('MTCH',10),('FLWR',10),('MIDL',10),('PFWY',10)]
         sellers_spec = buyers_spec
         traders_spec = {'sellers':sellers_spec, 'buyers':buyers_spec}
 
