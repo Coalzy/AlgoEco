@@ -445,6 +445,31 @@ class Trader_RI(Trader):
                         order=Order(self.tid, otype, quoteprice, self.orders[0].qty, time)
 
                 return order
+                
+# Trader subclass Middle
+# Bids/asks at centre of best bid and best ask
+# If it exceeds limit bid at limit
+class Trader_Middle(Trader):
+
+        def getorder(self, time, countdown, lob):
+                if len(self.orders) < 1:
+                        #no orders: return NULL
+                        order = None
+                else:
+                        minprice = lob['bids']['best']
+                        maxprice = lob['asks']['best']
+                        centre = maxprice+minprice
+                        centre = centre / 2
+                        limit = self.orders[0].price
+                        otype = self.orders[0].otype
+                        if otype == 'Bid':
+                                quoteprice = min(centre, limit)
+                        else:
+                                quoteprice = max(centre, limit)
+                                #NB should check it == 'Ask' and barf if not
+                        order=Order(self.tid, otype, quoteprice, self.orders[0].qty, time)
+
+                return order
 
 
 # Trader subclass Shaver
@@ -1294,14 +1319,14 @@ def populate_market(traders_spec, traders, shuffle, verbose):
                         return Trader_Giveaway('GVWY', name, 0.00)
                 elif robottype == 'ZIC':
                         return Trader_ZIC('ZIC', name, 0.00)
+                elif robottype == 'MIDL':
+                        return Trader_Middle('MIDL', name, 0.00)
                 elif robottype == 'SHVR':
                         return Trader_Shaver('SHVR', name, 0.00)
                 elif robottype == 'MTCH':
                         return Trader_Matcher('MTCH', name, 0.00)
                 elif robottype == 'FLWR':
                         return Trader_Follower('FLWR', name, 0.00)
-                elif robottype == 'SHVR':
-                        return Trader_Shaver('SHVR', name, 0.00)
                 elif robottype == 'SNPR':
                         return Trader_Sniper('SNPR', name, 0.00)
                 elif robottype == 'ZIP':
@@ -1685,7 +1710,7 @@ if __name__ == "__main__":
         order_sched = {'sup':supply_schedule, 'dem':demand_schedule,
                        'interval':30, 'timemode':'drip-poisson'}
 
-        buyers_spec = [('GVWY',10),('SHVR',10),('ZIC',10),('ZIP',10),('MTCH',10),('FLWR',10)]
+        buyers_spec = [('GVWY',10),('SHVR',10),('ZIC',10),('ZIP',10),('MTCH',10),('FLWR',10),('MIDL',10)]
         sellers_spec = buyers_spec
         traders_spec = {'sellers':sellers_spec, 'buyers':buyers_spec}
 
