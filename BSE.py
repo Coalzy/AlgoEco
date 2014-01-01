@@ -476,6 +476,66 @@ class Trader_Shaver(Trader):
                         order=Order(self.tid, otype, quoteprice, self.orders[0].qty, time)
 
                 return order
+                
+# Trader subclass Matcher
+# matches the best price
+# if there is no best price, creates "stub quote" at system max/min
+class Trader_Matcher(Trader):
+
+        def getorder(self, time, countdown, lob):
+                if len(self.orders) < 1:
+                        order = None
+                else:
+                        limitprice = self.orders[0].price
+                        otype = self.orders[0].otype
+                        if otype == 'Bid':
+                                if lob['bids']['n'] > 0:
+                                        quoteprice = lob['bids']['best']
+                                        if quoteprice > limitprice :
+                                                quoteprice = limitprice
+                                else:
+                                        quoteprice = lob['bids']['worst']
+                        else:
+                                if lob['asks']['n'] > 0:
+                                        quoteprice = lob['asks']['best']
+                                        if quoteprice < limitprice:
+                                                quoteprice = limitprice
+                                else:
+                                        quoteprice = lob['asks']['worst']
+                        self.lastquote = quoteprice
+                        order=Order(self.tid, otype, quoteprice, self.orders[0].qty, time)
+
+                return order
+                
+# Trader subclass Follower
+# stays one less than best price
+# if there is no best price, creates "stub quote" at system max/min
+class Trader_Follower(Trader):
+
+        def getorder(self, time, countdown, lob):
+                if len(self.orders) < 1:
+                        order = None
+                else:
+                        limitprice = self.orders[0].price
+                        otype = self.orders[0].otype
+                        if otype == 'Bid':
+                                if lob['bids']['n'] > 0:
+                                        quoteprice = lob['bids']['best'] - 1
+                                        if quoteprice > limitprice :
+                                                quoteprice = limitprice
+                                else:
+                                        quoteprice = lob['bids']['worst']
+                        else:
+                                if lob['asks']['n'] > 0:
+                                        quoteprice = lob['asks']['best'] + 1
+                                        if quoteprice < limitprice:
+                                                quoteprice = limitprice
+                                else:
+                                        quoteprice = lob['asks']['worst']
+                        self.lastquote = quoteprice
+                        order=Order(self.tid, otype, quoteprice, self.orders[0].qty, time)
+
+                return order
 
 
 # Trader subclass Sniper
@@ -1236,6 +1296,12 @@ def populate_market(traders_spec, traders, shuffle, verbose):
                         return Trader_ZIC('ZIC', name, 0.00)
                 elif robottype == 'SHVR':
                         return Trader_Shaver('SHVR', name, 0.00)
+                elif robottype == 'MTCH':
+                        return Trader_Matcher('MTCH', name, 0.00)
+                elif robottype == 'FLWR':
+                        return Trader_Follower('FLWR', name, 0.00)
+                elif robottype == 'SHVR':
+                        return Trader_Shaver('SHVR', name, 0.00)
                 elif robottype == 'SNPR':
                         return Trader_Sniper('SNPR', name, 0.00)
                 elif robottype == 'ZIP':
@@ -1619,7 +1685,7 @@ if __name__ == "__main__":
         order_sched = {'sup':supply_schedule, 'dem':demand_schedule,
                        'interval':30, 'timemode':'drip-poisson'}
 
-        buyers_spec = [('SNPR',10),('ZIP',10),('ZIC',10),('RI',10)]
+        buyers_spec = [('GVWY',10),('SHVR',10),('ZIC',10),('ZIP',10),('MTCH',10),('FLWR',10)]
         sellers_spec = buyers_spec
         traders_spec = {'sellers':sellers_spec, 'buyers':buyers_spec}
 
