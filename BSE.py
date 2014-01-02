@@ -1091,15 +1091,17 @@ class Trader_Custom_Sniper(Trader):
                 # in this version, trader has at most one order,
                 # if allow more than one, this needs to be self.orders.append(order)
                 self.orders=[order]
-                self.profit = 10
+                self.willing = 1
+                self.profit = order.price / float(100)
+                self.profit = self.profit * 5
 
         def getorder(self, time, countdown, lob):
                 if (len(self.orders) < 1) or (self.willing == 1):
                         order = None
                 else:
-                        self.profit = self.profit-1
-                        if self.profit < 5:
-                                self.profit = 5
+                        #self.profit = self.profit-1
+                        #if self.profit < 5:
+                        #        self.profit = 5
                         quoteprice = self.orders[0].price
                         otype = self.orders[0].otype
                         self.lastquote = quoteprice
@@ -1354,7 +1356,7 @@ def trade_stats(expid, traders, dumpfile, time, lob):
                 if ttype in trader_types.keys():
                         t_balance = trader_types[ttype]['balance_sum'] + traders[t].balance
                         n = trader_types[ttype]['n'] + 1
-                        n_sales = trader_types[ttype]['num_sales'] + traders[t].balance
+                        n_sales = trader_types[ttype]['num_sales'] + len(traders[t].blotter)
                 else:
                         t_balance = traders[t].balance
                         n = 1
@@ -1791,7 +1793,7 @@ if __name__ == "__main__":
 
         # run a sequence of trials, one session per trial
 
-        n_trials = 5
+        n_trials = 2
         tdump=open('avg_balance.csv','w')
         trial = 1
         if n_trials > 1:
