@@ -22,5 +22,6 @@ for i in range(1, len(strippedcontent)):
       
 for k,v in traders.iteritems():
   traders[k] = v/len(strippedcontent)
+  print('Avg profit for %s: %f'%(k,traders[k]))
     
-print traders
+#print traders
