@@ -329,6 +329,7 @@ class Trader:
                 self.orders = []
                 self.willing = 1
                 self.able = 1
+                self.untraded = 0
                 self.lastquote = None
 
 
@@ -339,6 +340,8 @@ class Trader:
         def add_order(self, order):
                 # in this version, trader has at most one order,
                 # if allow more than one, this needs to be self.orders.append(order)
+                if len(self.orders) > 0:
+                        self.untraded += 1
                 self.orders=[order]
 
 
@@ -671,6 +674,7 @@ class Trader_AA(Trader):
         self.aggressiveness = -1.0 * (0.3 * random.random())
         self.target = None
         self.trade_witnessed = False
+        self.untraded = 0
     
     def getorder(self, time, countdown, lob):
         if len(self.orders) < 1:
@@ -1087,11 +1091,25 @@ class Trader_MGD(Trader):
 # more explanation needed
 class Trader_Custom_Sniper(Trader):
 
+        def __init__(self, ttype, tid, balance):
+                self.ttype = ttype
+                self.tid = tid
+                self.balance = balance
+                self.blotter = []
+                self.orders = []
+                self.untraded = 0
+                self.willing = 1
+                self.able = 1
+                self.lastquote = None
+
         def add_order(self, order):
                 # in this version, trader has at most one order,
                 # if allow more than one, this needs to be self.orders.append(order)
+                if len(self.orders) > 0:
+                        self.untraded += 1
                 self.orders=[order]
                 self.willing = 1
+                self.new = True
                 self.profit = order.price / float(100)
                 self.profit = self.profit * 5
 
@@ -1140,6 +1158,7 @@ class Trader_ZIP(Trader):
                 self.ttype = ttype
                 self.tid = tid
                 self.balance = balance
+                self.untraded = 0
                 self.blotter = []
                 self.orders = []
                 self.job = None # this gets switched to 'Bid' or 'Ask' depending on order-type
@@ -1357,11 +1376,13 @@ def trade_stats(expid, traders, dumpfile, time, lob):
                         t_balance = trader_types[ttype]['balance_sum'] + traders[t].balance
                         n = trader_types[ttype]['n'] + 1
                         n_sales = trader_types[ttype]['num_sales'] + len(traders[t].blotter)
+                        n_untraded = trader_types[ttype]['untraded'] + traders[t].untraded
                 else:
                         t_balance = traders[t].balance
                         n = 1
                         n_sales = len(traders[t].blotter)
-                trader_types[ttype]={'n':n, 'balance_sum':t_balance, 'num_sales':n_sales}
+                        n_untraded = traders[t].untraded
+                trader_types[ttype]={'n':n, 'balance_sum':t_balance, 'num_sales':n_sales, 'untraded':n_untraded}
 
 
         dumpfile.write('%s, %06d, '% (expid, time))
@@ -1369,7 +1390,8 @@ def trade_stats(expid, traders, dumpfile, time, lob):
                 n = trader_types[ttype]['n']
                 s = trader_types[ttype]['balance_sum']
                 ns = trader_types[ttype]['num_sales']
-                dumpfile.write('%s, %d, %d, %d, %f, %f, ' % (ttype, ns, s, n, s/float(n), ns/float(n)))
+                nu = trader_types[ttype]['untraded']
+                dumpfile.write('%s, %d, %d, %d, %f, %f, %f, ' % (ttype, ns, s, n, s/float(n), ns/float(n), nu/float(n)))
 
         if lob['bids']['best'] != None :
                 dumpfile.write('%d, ' % (lob['bids']['best']))
@@ -1787,13 +1809,13 @@ if __name__ == "__main__":
         order_sched = {'sup':supply_schedule, 'dem':demand_schedule,
                        'interval':30, 'timemode':'drip-poisson'}
 
-        buyers_spec = [('GVWY',10),('SHVR',10),('ZIC',10),('ZIP',10),('MTCH',10),('FLWR',10),('MIDL',10),('PFWY',10),('CSNP',10)]
+        buyers_spec = [('GVWY',10),('SHVR',10),('ZIC',10),('ZIP',10),('MTCH',10),('FLWR',10),('MIDL',10),('PFWY',10),('CSNP',10),('RI',10),('AA',10)]
         sellers_spec = buyers_spec
         traders_spec = {'sellers':sellers_spec, 'buyers':buyers_spec}
 
         # run a sequence of trials, one session per trial
 
-        n_trials = 2
+        n_trials = 10
         tdump=open('avg_balance.csv','w')
         trial = 1
         if n_trials > 1:
