@@ -1081,6 +1081,39 @@ class Trader_MGD(Trader):
                                 none = None
                 else:
                         problem = 'Arisen'
+                
+# Trader subclass Custom Sniper
+# Never bids/asks, but accepts offers
+# more explanation needed
+class Trader_Custom_Sniper(Trader):
+
+        def getorder(self, time, countdown, lob):
+                if (len(self.orders) < 1) or (self.willing == 1):
+                        order = None
+                else:
+                        quoteprice = self.orders[0].price
+                        otype = self.orders[0].otype
+                        self.lastquote = quoteprice
+                        order=Order(self.tid, otype, quoteprice, self.orders[0].qty, time)
+                return order
+        
+        def respond(self, time, lob, trade, verbose):
+                if len(self.orders) > 0:
+                        otype = self.orders[0].otype
+                        limitprice = self.orders[0].price
+                        minprofit = 5
+                        if otype == 'Bid':
+                                acceptprice = limitprice - minprofit
+                                if lob['asks']['best'] < acceptprice:
+                                        self.willing = 0
+                                else:
+                                        self.willing = 1
+                        else:
+                                acceptprice = limitprice + minprofit
+                                if lob['bids']['best'] > acceptprice:
+                                        self.willing = 0
+                                else:
+                                        self.willing = 1
 
 
 # Trader subclass ZIP
@@ -1366,6 +1399,8 @@ def populate_market(traders_spec, traders, shuffle, verbose):
                         return Trader_AA('AA', name, 0.00)
                 elif robottype == 'RI': 
                         return Trader_RI('RI', name, 0.00)
+                elif robottype == 'CSNP':
+                        return Trader_Custom_Sniper('CSNP', name, 0.00)
                 else:
                         sys.exit('FATAL: don\'t know robot type %s\n' % robottype)
 
@@ -1741,13 +1776,13 @@ if __name__ == "__main__":
         order_sched = {'sup':supply_schedule, 'dem':demand_schedule,
                        'interval':30, 'timemode':'drip-poisson'}
 
-        buyers_spec = [('GVWY',10),('SHVR',10),('ZIC',10),('ZIP',10),('MTCH',10),('FLWR',10),('MIDL',10),('PFWY',10)]
+        buyers_spec = [('GVWY',10),('SHVR',10),('ZIC',10),('ZIP',10),('MTCH',10),('FLWR',10),('MIDL',10),('PFWY',10),('CSNP',10)]
         sellers_spec = buyers_spec
         traders_spec = {'sellers':sellers_spec, 'buyers':buyers_spec}
 
         # run a sequence of trials, one session per trial
 
-        n_trials = 1
+        n_trials = 5
         tdump=open('avg_balance.csv','w')
         trial = 1
         if n_trials > 1:
