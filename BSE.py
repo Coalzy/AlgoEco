@@ -48,7 +48,7 @@
 import sys
 import math
 import random
-
+#from Trader_FSM import Trader_FSM
 
 bse_sys_minprice = 1    # minimum price in the system, in cents/pennies
 bse_sys_maxprice = 1000 # maximum price in the system, in cents/pennies
@@ -1087,10 +1087,19 @@ class Trader_MGD(Trader):
 # more explanation needed
 class Trader_Custom_Sniper(Trader):
 
+        def add_order(self, order):
+                # in this version, trader has at most one order,
+                # if allow more than one, this needs to be self.orders.append(order)
+                self.orders=[order]
+                self.profit = 10
+
         def getorder(self, time, countdown, lob):
                 if (len(self.orders) < 1) or (self.willing == 1):
                         order = None
                 else:
+                        self.profit = self.profit-1
+                        if self.profit < 5:
+                                self.profit = 5
                         quoteprice = self.orders[0].price
                         otype = self.orders[0].otype
                         self.lastquote = quoteprice
@@ -1101,7 +1110,7 @@ class Trader_Custom_Sniper(Trader):
                 if len(self.orders) > 0:
                         otype = self.orders[0].otype
                         limitprice = self.orders[0].price
-                        minprofit = 5
+                        minprofit = self.profit
                         if otype == 'Bid':
                                 acceptprice = limitprice - minprofit
                                 if lob['asks']['best'] < acceptprice:
@@ -1345,17 +1354,20 @@ def trade_stats(expid, traders, dumpfile, time, lob):
                 if ttype in trader_types.keys():
                         t_balance = trader_types[ttype]['balance_sum'] + traders[t].balance
                         n = trader_types[ttype]['n'] + 1
+                        n_sales = trader_types[ttype]['num_sales'] + traders[t].balance
                 else:
                         t_balance = traders[t].balance
                         n = 1
-                trader_types[ttype]={'n':n, 'balance_sum':t_balance}
+                        n_sales = len(traders[t].blotter)
+                trader_types[ttype]={'n':n, 'balance_sum':t_balance, 'num_sales':n_sales}
 
 
         dumpfile.write('%s, %06d, '% (expid, time))
         for ttype in sorted(list(trader_types.keys())):
                 n = trader_types[ttype]['n']
                 s = trader_types[ttype]['balance_sum']
-                dumpfile.write('%s, %d, %d, %f, ' % (ttype, s, n, s/float(n)))
+                ns = trader_types[ttype]['num_sales']
+                dumpfile.write('%s, %d, %d, %d, %f, %f, ' % (ttype, ns, s, n, s/float(n), ns/float(n)))
 
         if lob['bids']['best'] != None :
                 dumpfile.write('%d, ' % (lob['bids']['best']))
@@ -1366,9 +1378,6 @@ def trade_stats(expid, traders, dumpfile, time, lob):
         else:
                 dumpfile.write('N, ')
         dumpfile.write('\n');
-
-
-
 
 
 # create a bunch of traders from traders_spec
