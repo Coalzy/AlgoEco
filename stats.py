@@ -13,12 +13,12 @@ nontrades = {}
 for content in contents:
   strippedcontent.append(content.replace(' ','').split(','))
   
-parameters = 7
-profitloc = 4
-tradesloc = 5
-nontradesloc = 6
+parameters = 4
+profitloc = 1
+tradesloc = 2
+nontradesloc = 3
 
-for i in range(2, len(strippedcontent[0])-3):
+for i in range(2, len(strippedcontent[0])-1):
   if (((i-2)%parameters) == 0):
     profit[strippedcontent[0][i]] = float(strippedcontent[0][i+profitloc])
     trades[strippedcontent[0][i]] = float(strippedcontent[0][i+tradesloc])
@@ -42,9 +42,14 @@ for k,v in nontrades.iteritems():
   
 sorted_profit = sorted(profit.iteritems(), key=operator.itemgetter(1), reverse=True)
 
-print('      PROFIT  TRADES  MISSED')
   
+f = open('statistics.txt', 'w')
+s = '      PROFIT  TRADES  MISSED'
+print(s)
+f.write(s + '\n')
 for k in sorted_profit:
-  print('%4s %7.2f %7.2f %7.2f'%(k[0],k[1],trades[k[0]],nontrades[k[0]]))
+  s = '%4s %7.2f %7.2f %7.2f'%(k[0],k[1],trades[k[0]],nontrades[k[0]])
+  print(s)
+  f.write(s + '\n')
     
 #print profit

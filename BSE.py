@@ -48,6 +48,7 @@
 import sys
 import math
 import random
+from numpy import arange, array, ones, linalg
 #from Trader_FSM import Trader_FSM
 
 bse_sys_minprice = 1    # minimum price in the system, in cents/pennies
@@ -284,7 +285,7 @@ class Exchange(Orderbook):
         def tape_dump(self,fname,fmode,tmode):
                 dumpfile = open(fname,fmode)
                 for tapeitem in self.tape:
-                        dumpfile.write('%s, %s\n' % (tapeitem['time'], tapeitem['price']))
+                        dumpfile.write('%4.4f, %s\n' % (tapeitem['time'], tapeitem['price']))
                 dumpfile.close()
                 if tmode == 'wipe':
                         self.tape = []
@@ -395,7 +396,7 @@ class Trader_Giveaway(Trader):
                 return order
                 
 # Trader subclass Profitaway
-# giveaway but always tries to make atleast 1 profit
+# giveaway but always tries to make atleast x percent profit
 # (but never makes a loss)
 class Trader_Profitaway(Trader):
 
@@ -406,9 +407,9 @@ class Trader_Profitaway(Trader):
                         quoteprice = self.orders[0].price
                         otype = self.orders[0].otype
                         if otype == 'Bid':
-                                quoteprice = quoteprice-1
+                                quoteprice = quoteprice-int(quoteprice*0.05)
                         else:
-                                quoteprice = quoteprice+1
+                                quoteprice = quoteprice+int(quoteprice*0.05)
                         self.lastquote = quoteprice
                         order=Order(self.tid,
                                     self.orders[0].otype,
@@ -416,8 +417,6 @@ class Trader_Profitaway(Trader):
                                     self.orders[0].qty,
                                     time)
                 return order
-
-
 
 # Trader subclass ZI-C
 # After Gode & Sunder 1993
@@ -455,6 +454,8 @@ class Trader_RI(Trader):
                             minprice = lob['bids']['worst']
                         if maxprice==None: 
                             maxprice = lob['asks']['worst']
+                        minprice += 1
+                        maxprice -= 1
                         limit = self.orders[0].price
                         otype = self.orders[0].otype
                         if otype == 'Bid':
@@ -502,7 +503,6 @@ class Trader_Middle(Trader):
                         order=Order(self.tid, otype, quoteprice, self.orders[0].qty, time)
 
                 return order
-
 
 # Trader subclass Shaver
 # shaves a penny off the best price
@@ -593,7 +593,6 @@ class Trader_Follower(Trader):
                         order=Order(self.tid, otype, quoteprice, self.orders[0].qty, time)
 
                 return order
-
 
 # Trader subclass Sniper
 # Based on Shaver,
@@ -1101,7 +1100,17 @@ class Trader_Custom_Sniper(Trader):
                 self.willing = 1
                 self.able = 1
                 self.lastquote = None
-
+                self.time = 0
+                self.duration = 0
+                self.order_records = []
+                self.profit_percent = 5
+                self.profit_limit = 5
+                self.new = False
+                self.price_history = []
+                self.time_history = []
+                self.history_length=50
+                self.call_times=[]
+                
         def add_order(self, order):
                 # in this version, trader has at most one order,
                 # if allow more than one, this needs to be self.orders.append(order)
@@ -1111,38 +1120,100 @@ class Trader_Custom_Sniper(Trader):
                 self.willing = 1
                 self.new = True
                 self.profit = order.price / float(100)
-                self.profit = self.profit * 5
+                if len(self.call_times) > 0 and len(self.time_history) > 0: 
+                        i=0
+                        no_trades=False
+                        while self.time_history[i] < self.call_times[0]: 
+                                i+=1
+                                if i>=len(self.time_history): 
+                                        no_trades=True
+                                        break
+                        if not no_trades: 
+                                total=0
+                                j=i
+                                diff=[]
+                                while i<len(self.price_history): 
+                                        total+=self.price_history[i]
+                                        diff.append(self.price_history[i])
+                                        i+=1
+                                average=total/float(i-j)
+                                diff=[(x-average)**2 for x in diff]
+                                sigma=((sum(diff)/float(i-j))**0.5)
+                        else: 
+                                average = order.price
+                                sigma=1
+                        self.profit_percent = (sigma / float(average)) * 100
+                #print self.profit_percent
+                if self.profit_percent > self.profit_limit:
+                        self.profit_percent = self.profit_limit
+                self.profit = self.profit * self.profit_percent
 
         def getorder(self, time, countdown, lob):
-                if (len(self.orders) < 1) or (self.willing == 1):
+                self.add_time(time)
+                if (len(self.orders) < 1):
                         order = None
                 else:
                         #self.profit = self.profit-1
                         #if self.profit < 5:
-                        #        self.profit = 5
+                        #        self.profit = 5otype = self.orders[0].otype
+                        limitprice = self.orders[0].price
                         quoteprice = self.orders[0].price
                         otype = self.orders[0].otype
-                        self.lastquote = quoteprice
-                        order=Order(self.tid, otype, quoteprice, self.orders[0].qty, time)
-                return order
-        
-        def respond(self, time, lob, trade, verbose):
-                if len(self.orders) > 0:
-                        otype = self.orders[0].otype
-                        limitprice = self.orders[0].price
-                        minprofit = self.profit
+                        #modifier=0 
+                        if len(self.order_records) > 0:
+                                avgduration = sum(self.order_records)/len(self.order_records)
+                                if ((avgduration/100) * 90) < self.duration:
+                                        self.profit = (limitprice/float(100)) * 0.1
+                        #if len(self.price_history) == self.history_length:
+                        #        grad = linalg.lstsq(array([self.time_history, ones(self.history_length)]).T, self.price_history)[0][0]
+                        #        modifier=11*grad 
                         if otype == 'Bid':
-                                acceptprice = limitprice - minprofit
+                                acceptprice = limitprice - self.profit
+                        #        acceptprice += modifier
                                 if lob['asks']['best'] < acceptprice:
                                         self.willing = 0
                                 else:
                                         self.willing = 1
                         else:
-                                acceptprice = limitprice + minprofit
+                                acceptprice = limitprice + self.profit
+                        #        acceptprice += modifier
                                 if lob['bids']['best'] > acceptprice:
                                         self.willing = 0
                                 else:
                                         self.willing = 1
+                        if self.willing == 0:
+                                self.lastquote = quoteprice
+                                order=Order(self.tid, otype, quoteprice, self.orders[0].qty, time)
+                        else:
+                                order = None
+                return order
+                
+        def add_history(self, element):
+                  #if len(self.price_history)==self.history_length: 
+                  #        self.price_history.pop(0)
+                  #        self.time_history.pop(0)
+                  #if len(self.price_history)<self.history_length: 
+                  self.price_history.append(element['price'])
+                  self.time_history.append(element['time'])
+                  #        return True
+                  #return False
+
+        def add_time(self, time): 
+                  if len(self.call_times)==self.history_length: 
+                          self.call_times.pop(0)
+                  if len(self.call_times)<self.history_length: 
+                          self.call_times.append(time)
+        
+        def respond(self, time, lob, trade, verbose):
+                if self.new == True:
+                        if self.time > 0:
+                                self.order_records.append(self.duration)
+                        self.time = time
+                        self.new = False
+                self.duration = time - self.time
+                if trade != None:
+                        self.add_history(trade)
+                
 
 
 # Trader subclass ZIP
@@ -1385,22 +1456,23 @@ def trade_stats(expid, traders, dumpfile, time, lob):
                 trader_types[ttype]={'n':n, 'balance_sum':t_balance, 'num_sales':n_sales, 'untraded':n_untraded}
 
 
-        dumpfile.write('%s, %06d, '% (expid, time))
+        dumpfile.write('%s, %4.4f, '% (expid, time))
         for ttype in sorted(list(trader_types.keys())):
                 n = trader_types[ttype]['n']
                 s = trader_types[ttype]['balance_sum']
                 ns = trader_types[ttype]['num_sales']
                 nu = trader_types[ttype]['untraded']
-                dumpfile.write('%s, %d, %d, %d, %f, %f, %f, ' % (ttype, ns, s, n, s/float(n), ns/float(n), nu/float(n)))
+                dumpfile.write('%s, %f, %f, %f, ' % (ttype, s/float(n), ns/float(n), nu/float(n)))
+                #dumpfile.write('%s, %f, ' % (ttype, s/float(n)))
 
-        if lob['bids']['best'] != None :
-                dumpfile.write('%d, ' % (lob['bids']['best']))
-        else:
-                dumpfile.write('N, ')
-        if lob['asks']['best'] != None :
-                dumpfile.write('%d, '% (lob['asks']['best']))
-        else:
-                dumpfile.write('N, ')
+#       if lob['bids']['best'] != None :
+#               dumpfile.write('%d, ' % (lob['bids']['best']))
+#       else:
+#               dumpfile.write('N, ')
+#       if lob['asks']['best'] != None :
+#               dumpfile.write('%d, '% (lob['asks']['best']))
+#       else:
+#               dumpfile.write('N, ')
         dumpfile.write('\n');
 
 
@@ -1430,8 +1502,8 @@ def populate_market(traders_spec, traders, shuffle, verbose):
                         return Trader_ZIP('ZIP', name, 0.00)
                 elif robottype == 'AA': 
                         return Trader_AA('AA', name, 0.00)
-                elif robottype == 'RI': 
-                        return Trader_RI('RI', name, 0.00)
+                elif robottype == 'RAND': 
+                        return Trader_RI('RAND', name, 0.00)
                 elif robottype == 'CSNP':
                         return Trader_Custom_Sniper('CSNP', name, 0.00)
                 else:
@@ -1549,8 +1621,8 @@ def customer_orders(time, last_update, traders, trader_stats, os, pending, verbo
                                 else:
                                         sys.exit('FAIL: 4th argument of sched in getorderprice() not callable')
                 else:
-                        offset_min = 0.0
-                        offset_max = 0.0
+                        offset_min = 0
+                        offset_max = 0
 
                 pmin = sysmin_check(offset_min + min(sched[0][0], sched[0][1]))
                 pmax = sysmax_check(offset_max + max(sched[0][0], sched[0][1]))
@@ -1785,32 +1857,21 @@ if __name__ == "__main__":
                 amplitude = 100*t/(c/pi2)
                 offset = gradient + amplitude * math.sin(wavelength*t)
                 return int(round(offset,0))
-                
-                
-
-##        range1 = (10, 190, schedule_offsetfn)
-##        range2 = (200,300, schedule_offsetfn)
-
-##        supply_schedule = [ {'from':start_time, 'to':duration/3, 'ranges':[range1], 'stepmode':'fixed'},
-##                            {'from':duration/3, 'to':2*duration/3, 'ranges':[range2], 'stepmode':'fixed'},
-##                            {'from':2*duration/3, 'to':end_time, 'ranges':[range1], 'stepmode':'fixed'}
-##                          ]
 
 
 
-        range1 = (95, 95, schedule_offsetfn)
+        range1 = (50,50)
         supply_schedule = [ {'from':start_time, 'to':end_time, 'ranges':[range1], 'stepmode':'fixed'}
                           ]
-
-        range1 = (105, 105, schedule_offsetfn)
+        range1 = (250,250)
         demand_schedule = [ {'from':start_time, 'to':end_time, 'ranges':[range1], 'stepmode':'fixed'}
                           ]
 
         order_sched = {'sup':supply_schedule, 'dem':demand_schedule,
-                       'interval':30, 'timemode':'drip-poisson'}
+                       'interval':10, 'timemode':'drip-poisson'}
 
-        buyers_spec = [('GVWY',10),('SHVR',10),('ZIC',10),('ZIP',10),('MTCH',10),('FLWR',10),('MIDL',10),('PFWY',10),('CSNP',10),('RI',10),('AA',10)]
-        sellers_spec = buyers_spec
+        sellers_spec = [('GVWY',0),('SHVR',0),('ZIC',0),('ZIP',20),('MTCH',0),('MIDL',0),('PFWY',0),('CSNP',0),('RAND',0),('AA',0),('SNPR',0)]
+        buyers_spec = [('GVWY',0),('SHVR',0),('ZIC',0),('ZIP',0),('MTCH',0),('MIDL',0),('PFWY',0),('CSNP',20),('RAND',0),('AA',0),('SNPR',0)]
         traders_spec = {'sellers':sellers_spec, 'buyers':buyers_spec}
 
         # run a sequence of trials, one session per trial
@@ -1825,6 +1886,7 @@ if __name__ == "__main__":
                
         while (trial<(n_trials+1)):
                trial_id = 'trial%04d' % trial
+               #print ('\n\n\n\n\n\n\n\n\n\n\n')
                market_session(trial_id, start_time, end_time, traders_spec, order_sched, tdump, dump_all)
                tdump.flush()
                trial = trial + 1
